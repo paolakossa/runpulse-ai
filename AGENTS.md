@@ -4,7 +4,7 @@
 
 RunPulse helps runners understand training data across wearable vendors. The MVP imports activities, preserves missing sensor data, and presents reliable metrics; medical advice, training prescriptions, live tracking, and vendor integrations are out of scope.
 
-The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL for planned persistence. Current API capabilities include a health endpoint, a bounded GPX parsing library, and deterministic activity analytics; upload endpoints and persistence are not implemented. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
+The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL for planned persistence. Current API capabilities include a health endpoint, a bounded GPX parsing library, deterministic activity analytics, and `POST /activities/import`; the import API is loopback-only, unauthenticated, and does not persist uploads or activity data. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
 
 ## Repository map
 

@@ -16,7 +16,7 @@ npm run dev:api
 npm run dev:web
 ```
 
-The API listens on port 3001 and the web application on port 3000. Run `npm test` for all analytics and GPX parser tests (recursively discovered under `apps/api/src`), and `npm run typecheck` to check all API source and tests. This scaffold includes a deterministic analytics core, a GPX importer library and a health endpoint; upload and persistence are not implemented yet.
+The API listens on `127.0.0.1:3001` and the web application on port 3000. Run `npm test` for analytics, GPX parser and API integration tests (recursively discovered under `apps/api/src`), and `npm run typecheck` to check all API source and tests. The API includes a deterministic analytics core, a GPX importer and a local-only import endpoint; persistence is not implemented.
 
 ## GPX import library (RP-02)
 
@@ -68,6 +68,12 @@ An empty activity has count 0, overlap false and null metrics. Empty segments ar
 Callers must provide canonical UTC ISO timestamps with millisecond precision, finite in-range coordinates when present, finite elevation when present, and positive safe-integer observed BPM when present. Invalid values, backwards timestamps within a segment, and unrepresentable arithmetic throw `RangeError`; absent optional sensors do not. No GPS jump filtering, elevation smoothing, moving-time detection or medical interpretation is performed. See [ADR 0003](docs/adr/0003-activity-metric-definitions.md) for definitions, examples and limitations.
 
 See [product vision](docs/product-vision.md), [architecture decision](docs/adr/0001-modular-monolith.md), and [backlog](docs/backlog.md).
+
+## Local Activity Import API (RP-02)
+
+`POST /activities/import` accepts one multipart file in the `file` field and reuses the bounded GPX parser and analytics engine. It returns activity start/end times, segment and point counts, calculated metrics, and coverage; unavailable metrics remain `null`. The response excludes coordinates, filenames and file contents. Files and activity data are processed in memory and are not persisted.
+
+Uploads are limited to 10 MiB, one file/part, no text fields, and a 60-second body-receive deadline. One import may be in flight per API process; additional imports receive `429`. Stable error responses distinguish invalid requests/content (`400`), unsupported formats (`415`), oversized files (`413`), timed-out uploads (`408`), capacity saturation (`429`) and unexpected failures (`500`). GPX input must be UTF-8 XML 1.0; UTF-8 BOMs are accepted. CORS is disabled. The API binds to loopback only; do not expose it on a network before authentication and data isolation are implemented. Synchronous parsing can block the event loop, so byte, parser-work and concurrency limits remain important. See [ADR 0004](docs/adr/0004-local-activity-import-api.md).
 
 ## Privacy
 Activity files may contain sensitive location and health data. Do not commit personal activity files, credentials, or production datasets. Use synthetic fixtures for tests.

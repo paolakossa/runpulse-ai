@@ -14,7 +14,7 @@ export const GPX_LIMITS = Object.freeze({
 const GPX_VERSIONS = new Map([['http://www.topografix.com/GPX/1/0', '1.0'], ['http://www.topografix.com/GPX/1/1', '1.1']]);
 const GARMIN_NAMESPACES = new Set(['http://www.garmin.com/xmlschemas/TrackPointExtension/v1', 'http://www.garmin.com/xmlschemas/TrackPointExtension/v2']);
 
-type ImportErrorCode = 'INPUT_TOO_LARGE' | 'UNSAFE_XML' | 'INVALID_XML' | 'INVALID_ACTIVITY' | 'RESOURCE_LIMIT';
+type ImportErrorCode = 'INPUT_TOO_LARGE' | 'UNSAFE_XML' | 'INVALID_XML' | 'INVALID_ACTIVITY' | 'RESOURCE_LIMIT' | 'UNSUPPORTED_FORMAT';
 
 /** Safe to surface to callers: messages never contain XML or sensor/location values. */
 export class ActivityImportError extends Error {
@@ -118,7 +118,10 @@ export function parseGpx(input: string | Uint8Array): Activity {
       return attribute?.uri === '' ? attribute.value : undefined;
     };
     if (!parent) {
-      if (tag.local !== 'gpx' || (tag.uri !== '' && !GPX_VERSIONS.has(tag.uri))) invalid('Expected a supported GPX root.');
+      if (tag.local !== 'gpx') {
+        throw new ActivityImportError('UNSUPPORTED_FORMAT', 'Only GPX activity files are supported.');
+      }
+      if (tag.uri !== '' && !GPX_VERSIONS.has(tag.uri)) invalid('Expected a supported GPX namespace.');
       gpxNamespace = tag.uri;
       const version = unqualified('version');
       if (version !== undefined && (tag.uri === '' ? !['1.0', '1.1'].includes(version) : version !== GPX_VERSIONS.get(tag.uri))) {

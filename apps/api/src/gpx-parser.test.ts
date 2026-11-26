@@ -71,7 +71,8 @@ test('rejects forbidden XML characters and excessive nesting even in ignored met
 });
 
 test('rejects wrong structure and activities with no usable points', () => {
-  for (const xml of ['<other/>', '<gpx/>', '<gpx><trk/></gpx>', gpx(''),
+  rejects('<other/>', 'UNSUPPORTED_FORMAT');
+  for (const xml of ['<gpx/>', '<gpx><trk/></gpx>', gpx(''),
     '<gpx><rte><rtept lat="0" lon="0"/></rte></gpx>', `<gpx>${point()}</gpx>`]) rejects(xml, 'INVALID_ACTIVITY');
 });
 

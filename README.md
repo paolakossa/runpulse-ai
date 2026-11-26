@@ -3,7 +3,7 @@
 A personal running analytics platform that turns activity files into actionable performance insights.
 
 ## First milestone
-Import a running activity, validate and normalize its data, persist it, and display its metrics. GPX is the first supported format; FIT and TCX are planned. No third-party API credentials are required.
+The product milestone is to import a running activity, validate and normalize its data, persist it, and display its metrics. RP-02 now delivers secure, local GPX upload and analysis with an ephemeral activity summary; persistence and FIT/TCX are planned. No third-party API credentials are required.
 
 ## Development
 Requirements: Node.js 22+, npm, Docker Compose.
@@ -16,7 +16,9 @@ npm run dev:api
 npm run dev:web
 ```
 
-The API listens on `127.0.0.1:3001` and the web application on port 3000. Run `npm test` for analytics, GPX parser and API integration tests (recursively discovered under `apps/api/src`), and `npm run typecheck` to check all API source and tests. The API includes a deterministic analytics core, a GPX importer and a local-only import endpoint; persistence is not implemented.
+The API listens on `127.0.0.1:3001` and the web application listens on `127.0.0.1:3000`. Run `npm test` for analytics, GPX parser, API integration, and web tests (recursively discovered under `apps/api/src` and `apps/web/app`), and `npm run typecheck` to check all API source and tests. The API includes a deterministic analytics core, a GPX importer, and a local-only import endpoint; persistence is not implemented.
+
+The API development command does not watch for source changes; restart it after API code or configuration edits. Next.js normally hot-reloads application edits, but restart the web service after changing environment variables, startup scripts, or framework/runtime configuration. Restart both services after dependency or shared workspace configuration changes.
 
 ## GPX import library (RP-02)
 
@@ -74,6 +76,12 @@ See [product vision](docs/product-vision.md), [architecture decision](docs/adr/0
 `POST /activities/import` accepts one multipart file in the `file` field and reuses the bounded GPX parser and analytics engine. It returns activity start/end times, segment and point counts, calculated metrics, and coverage; unavailable metrics remain `null`. The response excludes coordinates, filenames and file contents. Files and activity data are processed in memory and are not persisted.
 
 Uploads are limited to 10 MiB, one file/part, no text fields, and a 60-second body-receive deadline. One import may be in flight per API process; additional imports receive `429`. Stable error responses distinguish invalid requests/content (`400`), unsupported formats (`415`), oversized files (`413`), timed-out uploads (`408`), capacity saturation (`429`) and unexpected failures (`500`). GPX input must be UTF-8 XML 1.0; UTF-8 BOMs are accepted. CORS is disabled. The API binds to loopback only; do not expose it on a network before authentication and data isolation are implemented. Synchronous parsing can block the event loop, so byte, parser-work and concurrency limits remain important. See [ADR 0004](docs/adr/0004-local-activity-import-api.md).
+
+## Local GPX import frontend
+
+The Next.js page provides drag-and-drop and file selection for `.gpx` activities, upload progress, actionable validation/API errors, and a responsive activity summary with metrics and data coverage. It displays the API's calculated results without recalculating analytics; unavailable metrics remain distinct from real zero values. Activities are processed locally in memory and are not currently persisted.
+
+The browser posts multipart data to the same-origin `/api/activities/import` streaming Route Handler, which forwards the upload to the loopback-only NestJS API without buffering the whole request. The server-side `RUNPULSE_API_URL` setting accepts only a loopback HTTP origin and defaults to `http://127.0.0.1:3001`; it must not be used to expose the API remotely. CORS remains disabled. The frontend and API are local-development-only, unauthenticated, and provide no user or data isolation. Do not expose them on a network until authentication and data-isolation requirements are implemented.
 
 ## Privacy
 Activity files may contain sensitive location and health data. Do not commit personal activity files, credentials, or production datasets. Use synthetic fixtures for tests.

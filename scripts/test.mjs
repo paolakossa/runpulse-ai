@@ -9,8 +9,8 @@ function discover(directory) {
   });
 }
 
-const files = discover('apps/api/src').sort();
-if (files.length === 0) throw new Error('No API tests discovered.');
+const files = ['apps/api/src', 'apps/web/app'].flatMap(discover).sort();
+if (files.length === 0) throw new Error('No tests discovered.');
 const result = spawnSync(process.execPath, ['--experimental-strip-types', '--test', ...files], { stdio: 'inherit' });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;

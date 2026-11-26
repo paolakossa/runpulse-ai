@@ -4,7 +4,7 @@
 
 RunPulse helps runners understand training data across wearable vendors. The MVP imports activities, preserves missing sensor data, and presents reliable metrics; medical advice, training prescriptions, live tracking, and vendor integrations are out of scope.
 
-The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL for planned persistence. Current API capabilities include a health endpoint, a bounded GPX parsing library, deterministic activity analytics, and `POST /activities/import`; the import API is loopback-only, unauthenticated, and does not persist uploads or activity data. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
+The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL for planned persistence. Current capabilities include a bounded GPX parser, deterministic activity analytics, `POST /activities/import`, and a local web upload/dashboard flow. The API is loopback-only, unauthenticated, and does not persist uploads or activity data. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
 
 ## Repository map
 
@@ -12,7 +12,7 @@ The project is a TypeScript modular monolith: Next.js web app, NestJS API, and P
 - `apps/api/src/`: NestJS entry point, activity domain, GPX parser, analytics, and tests.
 - `docs/product-vision.md`, `docs/backlog.md`: product goals and story acceptance criteria.
 - `docs/adr/`: accepted and proposed architectural decisions; consult before changing established policies.
-- `scripts/`: recursive API test discovery and synthetic GPX benchmarking.
+- `scripts/`: recursive API/web test discovery and synthetic GPX benchmarking.
 - `compose.yaml`: local PostgreSQL service; `.github/workflows/ci.yml`: CI checks.
 
 ## Tooling and commands
@@ -31,7 +31,7 @@ npm run typecheck
 npm run build -w @runpulse/web
 ```
 
-Run the API and web development commands in separate terminals. `npm test` discovers API tests recursively. `npm run typecheck` checks API source and tests. The web package has a production build command; there is no API build script currently.
+Run the API and web development commands in separate terminals; both servers bind to loopback for local development. The web app forwards multipart uploads through a same-origin streaming proxy to the API. The API dev command does not watch source changes, so restart it after API code or configuration edits. Next.js normally hot-reloads application edits, but restart the web service after environment, startup-script, or framework/runtime configuration changes. Restart both services after dependency or shared workspace configuration changes. `npm test` discovers API and web tests recursively. `npm run typecheck` checks API source and tests. The web package has a production build command; there is no API build script currently.
 
 ## Engineering practices
 

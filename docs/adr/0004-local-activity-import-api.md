@@ -12,6 +12,18 @@ Add `POST /activities/import` as a thin NestJS controller over an application se
 
 The endpoint accepts exactly one multipart file named `file`. It classifies content through the GPX parser rather than trusting MIME type or extension, and recognizes a FIT signature as unsupported. UTF-8 XML 1.0 is accepted, including a UTF-8 BOM; invalid UTF-8 or conflicting XML declarations are rejected.
 
+## Frontend integration
+
+The Next.js app exposes a same-origin `POST /api/activities/import` Node.js Route Handler. A Next.js rewrite was considered, but the resolved Next.js 16.4.6 rewrite proxy clones request bodies with a default 10 MiB cap, which leaves no room for multipart framing around a file at the API's exact 10 MiB limit. Its default proxy timeout is 30 seconds, shorter than the API's 60-second body-receive deadline. Raising those rewrite limits would still rely on rewrite body cloning; the Route Handler was chosen to keep the request streaming end-to-end.
+
+The Route Handler forwards the original multipart `Content-Type` and pipes the incoming body to `node:http` without parsing or rebuilding multipart data or buffering the complete upload. Node stream backpressure bounds forwarding to the speed of the API consumer. The API remains responsible for the file-size and multipart limits; the proxy forwards the backend status and response body while allowing only `content-type`, `cache-control`, and `retry-after` response headers.
+
+`RUNPULSE_API_URL` is server-side configuration only. It defaults to `http://127.0.0.1:3001` and accepts only HTTP loopback origins (`127.0.0.1`, `localhost`, or `::1`) without credentials, path, query, or fragment. It is not derived from request data. The API and documented web development server bind to loopback; CORS remains disabled.
+
+If the incoming request signal aborts, the Route Handler destroys the streamed body, upstream request, and any active upstream response, and removes its abort listener when the response closes. The API observes the disconnected upload and releases its admission permit; the proxy integration test verifies a later import can proceed.
+
+The proxy adds no independent total-response deadline. The API's receive deadline applies only while the request body is arriving; synchronous parsing/analytics have bounded input and parser work but no strict wall-clock deadline. A stalled API after body receipt may therefore keep the request open until the connection closes. This remains an accepted local-development limitation; reassess only if the service becomes remotely accessible or workload measurements require a response deadline.
+
 ## Security and resource budgets
 
 - Multer memory storage has a 10 MiB inclusive file limit, matching the parser. The streaming file-size limit applies before the complete upload is buffered.

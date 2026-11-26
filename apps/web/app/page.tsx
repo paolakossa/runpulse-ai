@@ -1,1 +1,19 @@
-export default function Home() { return <main><header>RUNPULSE / ANALYTICS</header><h1>Every run tells a story.</h1><p>Understand your training, one activity at a time.</p><section><h2>No activities yet</h2><p>Activity import is the next development milestone. Your metrics will appear here once an activity has been imported.</p></section></main>; }
+import ActivityImportForm from './activity-import-form';
+
+export default function Home() {
+  return (
+    <main className="page-shell">
+      <header className="brand">
+        <span className="brand-mark" aria-hidden="true">R</span>
+        <span>RUNPULSE <span className="brand-divider">/</span> AI</span>
+      </header>
+      <div className="hero">
+        <p className="eyebrow">RUNNING, WITH CONTEXT</p>
+        <h1>Every run<br />tells a <span>story.</span></h1>
+        <p className="hero-copy">Import an activity to explore your effort, distance, and data coverage.</p>
+      </div>
+      <ActivityImportForm />
+      <footer>Built for thoughtful training. Metrics are descriptive, not medical advice.</footer>
+    </main>
+  );
+}

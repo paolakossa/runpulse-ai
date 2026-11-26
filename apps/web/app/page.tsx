@@ -1,0 +1,1 @@
+export default function Home() { return <main><header>RUNPULSE / ANALYTICS</header><h1>Every run tells a story.</h1><p>Understand your training, one activity at a time.</p><section><h2>No activities yet</h2><p>Activity import is the next development milestone. Your metrics will appear here once an activity has been imported.</p></section></main>; }

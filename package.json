@@ -1,0 +1,1 @@
+{"name":"runpulse-ai","private":true,"workspaces":["apps/*"],"scripts":{"dev:api":"npm run dev -w @runpulse/api","dev:web":"npm run dev -w @runpulse/web","test":"node --experimental-strip-types --test apps/api/src/metrics.test.ts"},"engines":{"node":">=22"}}

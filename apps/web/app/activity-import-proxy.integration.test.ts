@@ -7,6 +7,11 @@ import type { DynamicModule, INestApplication } from '@nestjs/common';
 import { gpx } from '../../api/src/gpx-fixtures.ts';
 import { MAX_ACTIVITY_FILE_BYTES } from './activity-import-utils.ts';
 import { getActivityImportTarget, proxyActivityImport } from './activity-import-proxy.ts';
+import { GET as getActivityList } from './api/activities/route.ts';
+import {
+  DELETE as deleteActivity,
+  GET as getActivity,
+} from './api/activities/[id]/route.ts';
 
 const require = createRequire(`${process.cwd()}/apps/api/src/app.module.ts`);
 const { configureTestDatabaseProcess } = require('../../../scripts/database-url-policy.cjs') as {
@@ -206,5 +211,59 @@ test('cancellation through the proxy releases API capacity for a later import', 
     await waitForSuccessfulImport(cancellationApiUrl);
   } finally {
     await cancellationApp.close();
+  }
+});
+
+test('same-origin history routes list, retrieve, and delete a synthetic persisted activity', async () => {
+  const previousUrl = process.env.RUNPULSE_API_URL;
+  process.env.RUNPULSE_API_URL = apiUrl;
+  try {
+    const before = await getActivityList(new Request('http://runpulse.local/api/activities?page=1&pageSize=100'));
+    assert.equal(before.status, 200);
+    const beforePage = await before.json() as { total: number };
+
+    const imported = await proxyActivityImport(formRequest(gpx()), apiUrl);
+    await trackCreatedActivity(imported);
+    assert.equal(imported.status, 200);
+    const importedBody = await imported.json() as {
+      activity: { id: string; importedAt: string };
+    };
+    const id = importedBody.activity.id;
+    assert.ok(Number.isFinite(Date.parse(importedBody.activity.importedAt)));
+
+    const listResponse = await getActivityList(
+      new Request('http://runpulse.local/api/activities?page=1&pageSize=100'),
+    );
+    assert.equal(listResponse.status, 200);
+    assert.equal(listResponse.headers.get('cache-control'), 'no-store');
+    const page = await listResponse.json() as {
+      items: Array<{ activity: { id: string } }>;
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+    assert.equal(page.page, 1);
+    assert.equal(page.pageSize, 100);
+    assert.equal(page.total, beforePage.total + 1);
+    assert.ok(page.totalPages >= 1);
+    assert.ok(page.items.some(item => item.activity.id === id));
+
+    const context = { params: Promise.resolve({ id }) };
+    const detailResponse = await getActivity(new Request('http://runpulse.local'), context);
+    assert.equal(detailResponse.status, 200);
+    const detail = await detailResponse.json() as { activity: { id: string } };
+    assert.equal(detail.activity.id, id);
+
+    const deletionResponse = await deleteActivity(new Request('http://runpulse.local'), context);
+    assert.equal(deletionResponse.status, 204);
+    const deletedDetail = await getActivity(new Request('http://runpulse.local'), context);
+    assert.equal(deletedDetail.status, 404);
+    assert.equal((await errorBody(deletedDetail)).code, 'ACTIVITY_NOT_FOUND');
+    const repeatedDeletion = await deleteActivity(new Request('http://runpulse.local'), context);
+    assert.equal(repeatedDeletion.status, 404);
+  } finally {
+    if (previousUrl === undefined) delete process.env.RUNPULSE_API_URL;
+    else process.env.RUNPULSE_API_URL = previousUrl;
   }
 });

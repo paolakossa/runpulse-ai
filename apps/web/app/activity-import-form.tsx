@@ -1,14 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import ActivitySummary from './activity-summary';
+import { notifyActivitiesChanged } from './activity-events.ts';
 import {
-  formatCoverage,
-  formatDistance,
-  formatDuration,
-  formatElevation,
-  formatHeartRate,
-  formatPace,
   getImportErrorMessage,
+  isDuplicateActivityError,
   MAX_ACTIVITY_FILE_BYTES,
   parseActivityImportResponse,
   type ActivityImportResponse,
@@ -18,7 +16,7 @@ type FormState =
   | { status: 'idle' }
   | { status: 'uploading' }
   | { status: 'success'; activity: ActivityImportResponse }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; duplicate: boolean };
 
 function validateFile(file: File): string | null {
   if (!file.name.toLowerCase().endsWith('.gpx')) {
@@ -27,33 +25,6 @@ function validateFile(file: File): string | null {
   if (file.size === 0) return 'That file is empty. Choose another GPX file.';
   if (file.size > MAX_ACTIVITY_FILE_BYTES) return 'The file exceeds the 10 MiB limit. Choose a smaller GPX file.';
   return null;
-}
-
-function formatTimestamp(value: string | null): string {
-  if (value === null) return 'N/A';
-  return `${new Date(value).toLocaleString()} (local time)`;
-}
-
-function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <article className="metric-card">
-      <h3>{label}</h3>
-      <p className="metric-value">{value}</p>
-      {note && <p className="metric-note">{note}</p>}
-    </article>
-  );
-}
-
-function Coverage({ label, value, basis }: { label: string; value: number | null; basis: string }) {
-  return (
-    <div className="coverage-row">
-      <div>
-        <strong>{label}</strong>
-        <span>{basis}</span>
-      </div>
-      <strong className="coverage-value">{formatCoverage(value)}</strong>
-    </div>
-  );
 }
 
 export default function ActivityImportForm() {
@@ -135,22 +106,28 @@ export default function ActivityImportForm() {
       }
 
       if (!response.ok) {
-        setState({ status: 'error', message: getImportErrorMessage(response.status, payload) });
+        setState({
+          status: 'error',
+          message: getImportErrorMessage(response.status, payload),
+          duplicate: isDuplicateActivityError(payload),
+        });
         return;
       }
 
+      notifyActivitiesChanged();
       const activity = parseActivityImportResponse(payload);
       if (!activity) {
         setState({
           status: 'error',
           message: 'The API returned an unexpected response. Confirm it is running locally, then retry.',
+          duplicate: false,
         });
         return;
       }
       setFile(null);
       setState({ status: 'success', activity });
     } catch {
-      setState({ status: 'error', message: getImportErrorMessage(502, null) });
+      setState({ status: 'error', message: getImportErrorMessage(502, null), duplicate: false });
     } finally {
       submitting.current = false;
     }
@@ -178,48 +155,16 @@ export default function ActivityImportForm() {
 
       {activity ? (
         <div className="results" aria-live="polite">
-          <div className="activity-meta">
-            <p><span>Started</span><strong>{formatTimestamp(activity.activity.startTime)}</strong></p>
-            <p><span>Ended</span><strong>{formatTimestamp(activity.activity.endTime)}</strong></p>
-            <p><span>Segments</span><strong>{activity.activity.segmentCount}</strong></p>
-            <p><span>Track points</span><strong>{activity.activity.trackPointCount}</strong></p>
+          <ActivitySummary activity={activity} />
+          <div className="import-result-actions">
+            <Link className="secondary-button" href={`/activities/${activity.activity.id}`}>
+              View activity
+            </Link>
+            <Link className="secondary-button" href="/activities">Activity history</Link>
+            <button className="secondary-button" type="button" onClick={importAnother}>
+              Import another activity
+            </button>
           </div>
-
-          {activity.metrics.hasOverlappingSegments && (
-            <p className="overlap-warning" role="status">
-              These segments overlap in time. Average elapsed pace is unavailable for overlapping segments.
-            </p>
-          )}
-
-          <h3 className="subheading">Performance</h3>
-          <div className="metric-grid">
-            <Metric label="Total distance" value={formatDistance(activity.metrics.totalDistanceMeters)} />
-            <Metric label="Elapsed duration" value={formatDuration(activity.metrics.elapsedSeconds)} />
-            <Metric
-              label="Recorded duration"
-              value={formatDuration(activity.metrics.recordedDurationSeconds)}
-              note="Not moving time"
-            />
-            <Metric label="Average elapsed pace" value={formatPace(activity.metrics.averageElapsedPaceSecondsPerKm)} />
-            <Metric label="Elevation gain" value={formatElevation(activity.metrics.totalElevationGainMeters)} />
-            <Metric label="Elevation loss" value={formatElevation(activity.metrics.totalElevationLossMeters)} />
-            <Metric label="Average heart rate" value={formatHeartRate(activity.metrics.averageHeartRateBpm)} />
-            <Metric label="Maximum heart rate" value={formatHeartRate(activity.metrics.maxHeartRateBpm)} />
-          </div>
-
-          <h3 className="subheading">Data coverage</h3>
-          <div className="coverage-list">
-            <Coverage label="Distance" value={activity.coverage.distance} basis="Adjacent within-segment pairs" />
-            <Coverage label="Elevation" value={activity.coverage.elevation} basis="Adjacent within-segment pairs" />
-            <Coverage label="Heart rate" value={activity.coverage.heartRate} basis="Recorded time with eligible readings" />
-          </div>
-          <p className="coverage-note">
-            Coverage is an availability indicator, not a sensor accuracy score. Heart-rate coverage is time-based;
-            distance and elevation coverage are pair-based.
-          </p>
-          <button className="secondary-button" type="button" onClick={importAnother}>
-            Import another activity
-          </button>
         </div>
       ) : (
         <form className="upload-form" onSubmit={onSubmit}>
@@ -251,6 +196,9 @@ export default function ActivityImportForm() {
           {(selectingError || state.status === 'error') && (
             <p className="error-message" role="alert">
               {state.status === 'error' ? state.message : selectingError}
+              {state.status === 'error' && state.duplicate && (
+                <> <Link href="/activities" className="inline-link">View activity history</Link>.</>
+              )}
             </p>
           )}
 

@@ -4,11 +4,11 @@
 
 RunPulse helps runners understand training data across wearable vendors. The MVP imports activities, preserves missing sensor data, and presents reliable metrics; medical advice, training prescriptions, live tracking, and vendor integrations are out of scope.
 
-The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL accessed through Prisma migrations. Current capabilities include a bounded GPX parser, deterministic activity analytics, persisted summary endpoints (`POST /activities/import`, `GET /activities`, `GET /activities/:id`, `DELETE /activities/:id`), and a local web upload/dashboard flow. The API and database are loopback-only and single-user; authentication and data isolation are not implemented. Persist only summaries and derived metrics, never original files, XML, raw GPS coordinates, or individual heart-rate samples. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
+The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL accessed through Prisma migrations. Current capabilities include a bounded GPX parser, deterministic activity analytics, persisted summary endpoints (`POST /activities/import`, `GET /activities`, `GET /activities/:id`, `DELETE /activities/:id`), and a local web application with Overview, paginated Activities, details, deletion, and Import routes. Activity reads and deletion use explicit same-origin API routes; multipart import uses a streaming proxy. The API and database are loopback-only and single-user; authentication and data isolation are not implemented. Persist only summaries and derived metrics, never original files, XML, raw GPS coordinates, or individual heart-rate samples. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
 
 ## Repository map
 
-- `apps/web/`: Next.js UI (`app/`) and web package scripts.
+- `apps/web/`: Next.js application routes and UI (`app/`), same-origin API proxies, and web package scripts.
 - `apps/api/src/`: NestJS entry point, activity domain, GPX parser, analytics, persistence services, and tests.
 - `apps/api/prisma/`: Prisma schema and version-controlled additive migrations.
 - `docs/product-vision.md`, `docs/backlog.md`: product goals and story acceptance criteria.

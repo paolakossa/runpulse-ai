@@ -4,12 +4,13 @@
 
 RunPulse helps runners understand training data across wearable vendors. The MVP imports activities, preserves missing sensor data, and presents reliable metrics; medical advice, training prescriptions, live tracking, and vendor integrations are out of scope.
 
-The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL for planned persistence. Current capabilities include a bounded GPX parser, deterministic activity analytics, `POST /activities/import`, and a local web upload/dashboard flow. The API is loopback-only, unauthenticated, and does not persist uploads or activity data. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
+The project is a TypeScript modular monolith: Next.js web app, NestJS API, and PostgreSQL accessed through Prisma migrations. Current capabilities include a bounded GPX parser, deterministic activity analytics, persisted summary endpoints (`POST /activities/import`, `GET /activities`, `GET /activities/:id`, `DELETE /activities/:id`), and a local web upload/dashboard flow. The API and database are loopback-only and single-user; authentication and data isolation are not implemented. Persist only summaries and derived metrics, never original files, XML, raw GPS coordinates, or individual heart-rate samples. Keep ingestion, domain calculations, persistence, and presentation separate. Domain logic should be deterministic, side-effect-free, and independent of file formats or frameworks where practical.
 
 ## Repository map
 
 - `apps/web/`: Next.js UI (`app/`) and web package scripts.
-- `apps/api/src/`: NestJS entry point, activity domain, GPX parser, analytics, and tests.
+- `apps/api/src/`: NestJS entry point, activity domain, GPX parser, analytics, persistence services, and tests.
+- `apps/api/prisma/`: Prisma schema and version-controlled additive migrations.
 - `docs/product-vision.md`, `docs/backlog.md`: product goals and story acceptance criteria.
 - `docs/adr/`: accepted and proposed architectural decisions; consult before changing established policies.
 - `scripts/`: recursive API/web test discovery and synthetic GPX benchmarking.
@@ -17,13 +18,17 @@ The project is a TypeScript modular monolith: Next.js web app, NestJS API, and P
 
 ## Tooling and commands
 
-Use Node.js 22+ and npm from the repository root; this is an npm workspace. Keep dependency changes in the relevant workspace manifest and root lockfile. Prefer `npm ci` for reproducible installs. If installing dependencies, use the public npm registry and an isolated temporary user config; never modify global npm configuration.
+Use Node.js >=22.12 and <23 and npm from the repository root; this is an npm workspace. Keep dependency changes in the relevant workspace manifest and root lockfile. Prefer `npm ci` for reproducible installs. Use the public npm registry and an isolated user config, for example `npm ci --userconfig=/dev/null --registry=https://registry.npmjs.org`; never modify global npm configuration.
 
 Common commands:
 
 ```sh
-npm ci
-docker compose up -d
+npm ci --userconfig=/dev/null --registry=https://registry.npmjs.org
+cp .env.example .env
+docker compose up -d postgres
+npm run db:migrate:deploy
+docker compose --profile test up -d postgres-test
+npm run db:migrate:test
 npm run dev:api
 npm run dev:web
 npm test
@@ -31,7 +36,9 @@ npm run typecheck
 npm run build -w @runpulse/web
 ```
 
-Run the API and web development commands in separate terminals; both servers bind to loopback for local development. The web app forwards multipart uploads through a same-origin streaming proxy to the API. The API dev command does not watch source changes, so restart it after API code or configuration edits. Next.js normally hot-reloads application edits, but restart the web service after environment, startup-script, or framework/runtime configuration changes. Restart both services after dependency or shared workspace configuration changes. `npm test` discovers API and web tests recursively. `npm run typecheck` checks API source and tests. The web package has a production build command; there is no API build script currently.
+Replace every `.env.example` placeholder with local-only values and generate a 32-byte `ACTIVITY_FINGERPRINT_SECRET` using `openssl rand -hex 32`. Keep development and test credentials separate. The development and test databases use distinct Compose services, ports, and volumes; never reset or remove existing databases/volumes. `npm test` requires an explicit `RUNPULSE_TEST_DATABASE_URL`, validates its local host, port, database, user, and credential separation before Prisma generation, and explicitly propagates the validated URL as `DATABASE_URL` to database-capable test processes. It never falls back to development `DATABASE_URL`. API and web integration tests repeat the guard before loading NestJS or Prisma, including when invoked directly. Use `npm run test:unit` for database-independent tests without PostgreSQL. CI uses an isolated ephemeral PostgreSQL service on loopback port 5432 with the dedicated test database/user.
+
+Run the API and web development commands in separate terminals; both servers bind to loopback for local development. The web app forwards multipart uploads through a same-origin streaming proxy to the API. The API dev command does not watch source changes, so restart it after API code or configuration edits. Next.js normally hot-reloads application edits, but restart the web service after environment, startup-script, or framework/runtime configuration changes. Restart both services after dependency or shared workspace configuration changes. `npm run db:migrate:deploy` is restricted to the configured local development database; `npm run db:migrate:test` requires the explicit isolated test URL. Use only the guarded npm migration commands: Prisma permits `migrate deploy` and `migrate status` against authorized local targets (or the ephemeral CI target), and rejects extra CLI options/custom configs. Client generation does not require a database connection. Never run destructive migration commands or remove volumes. `npm test` runs the full API/web and database-policy suites after validating and propagating the isolated test URL; direct database integration test invocation is guarded. `npm run test:unit` runs database-independent tests without PostgreSQL. `npm run typecheck` checks API source and tests. The web package has a production build command; there is no API build script currently.
 
 ## Engineering practices
 

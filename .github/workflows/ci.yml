@@ -3,11 +3,32 @@ on: [push, pull_request]
 jobs:
   analytics-tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: runpulse_test
+          POSTGRES_DB: runpulse_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U runpulse_test -d runpulse_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://runpulse_test@127.0.0.1:5432/runpulse_test?schema=public
+      RUNPULSE_TEST_DATABASE_URL: postgresql://runpulse_test@127.0.0.1:5432/runpulse_test?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
+      - name: Generate ephemeral test fingerprint key
+        run: echo "ACTIVITY_FINGERPRINT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - run: npm run db:migrate:deploy
       - run: npm test
       - run: npm run typecheck
+      - run: npm run build -w @runpulse/web

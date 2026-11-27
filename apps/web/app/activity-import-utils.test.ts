@@ -51,6 +51,19 @@ test('rejects malformed or non-finite activity responses', () => {
   }), null);
 });
 
+test('preserves persistence identifiers and timestamps when returned by the API', () => {
+  const persisted = {
+    ...response,
+    activity: {
+      ...response.activity,
+      id: '857f4000-4264-4d12-8f52-2501d447ddf0',
+      importedAt: '2026-01-02T03:04:05.000Z',
+    },
+  };
+  assert.deepEqual(parseActivityImportResponse(persisted), persisted);
+  assert.deepEqual(parseActivityImportResponse(response), response);
+});
+
 test('formats null as N/A while preserving real zero measurements', () => {
   assert.equal(formatDistance(null), 'N/A');
   assert.equal(formatDistance(0), '0.00 km');
@@ -84,6 +97,7 @@ test('maps stable API errors to actionable upload messages', () => {
     [415, 'UNSUPPORTED_FORMAT', /\.gpx/i],
     [408, 'UPLOAD_TIMEOUT', /timed out/i],
     [429, 'IMPORT_SATURATED', /in progress/i],
+    [503, 'DATABASE_UNAVAILABLE', /database.*unavailable/i],
     [500, 'INTERNAL_ERROR', /try again/i],
   ] as const;
 
@@ -91,4 +105,11 @@ test('maps stable API errors to actionable upload messages', () => {
     assert.match(getImportErrorMessage(statusCode, { statusCode, code, message: 'Backend details are not shown.' }), message);
   }
   assert.match(getImportErrorMessage(502, null), /local.*API/i);
+});
+
+test('gives an actionable message for a duplicate activity', () => {
+  assert.equal(
+    getImportErrorMessage(409, { statusCode: 409, code: 'DUPLICATE_ACTIVITY' }),
+    'This activity has already been imported. Choose a different GPX file to continue.',
+  );
 });

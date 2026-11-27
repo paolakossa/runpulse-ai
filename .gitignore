@@ -3,6 +3,7 @@ node_modules/
 dist/
 .env*
 !.env.example
+apps/api/src/generated/prisma/
 *.fit
 *.gpx
 *.tcx

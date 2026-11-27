@@ -1,1 +1,29 @@
-{"name":"@runpulse/api","private":true,"scripts":{"dev":"ts-node src/main.ts"},"dependencies":{"@nestjs/common":"^11.0.0","@nestjs/core":"^11.0.0","@nestjs/platform-express":"^11.0.0","reflect-metadata":"^0.2.2","rxjs":"^7.8.1","saxes":"6.0.0"},"devDependencies":{"@types/node":"^22.0.0","ts-node":"^10.9.2","typescript":"^5.7.0"}}
+{
+  "name": "@runpulse/api",
+  "private": true,
+  "scripts": {
+    "dev": "node --env-file=../../.env -r ts-node/register src/main.ts",
+    "prisma:generate": "prisma generate",
+    "migrate:deploy": "node --env-file-if-exists=../../.env ../../scripts/prisma-migrate.mjs deploy",
+    "migrate:status": "node --env-file-if-exists=../../.env ../../scripts/prisma-migrate.mjs status"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "pg": "8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "saxes": "6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "8.23.1",
+    "dotenv": "18.0.10",
+    "prisma": "7.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}

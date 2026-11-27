@@ -270,8 +270,7 @@ export default function ActivityImportForm() {
       <aside className="privacy-notice">
         <span aria-hidden="true">◇</span>
         <p>
-          Your activity is processed locally by the RunPulse API. It is not currently saved or persisted.
-          Your GPS route is not shown in this summary.
+          Your activity summary and metrics are stored in your local PostgreSQL database. Original GPX files and GPS coordinates are not retained.
         </p>
       </aside>
     </section>

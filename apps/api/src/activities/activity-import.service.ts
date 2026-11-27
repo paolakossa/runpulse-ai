@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ActivityImportApiError } from './activity-import-errors.ts';
 import type { ActivityMetrics } from '../activity-metrics.ts';
 import { calculateActivityMetrics } from '../activity-metrics.ts';
 import { ActivityImportError, parseGpx } from '../gpx-parser.ts';
+import { ActivityPersistenceService } from './activity-persistence.service.ts';
+import { ACTIVITY_FINGERPRINT_SECRET, activityFingerprint } from './activity-fingerprint.ts';
 
 export interface ActivityImportSummary {
   activity: {
@@ -30,6 +32,13 @@ export interface ActivityImportSummary {
   };
 }
 
+export interface PersistedActivitySummary extends ActivityImportSummary {
+  activity: ActivityImportSummary['activity'] & {
+    id: string;
+    importedAt: string;
+  };
+}
+
 function hasFitSignature(input: Uint8Array): boolean {
   return input.byteLength >= 12 &&
     (input[0] === 12 || input[0] === 14) &&
@@ -51,7 +60,12 @@ function assertFiniteMetrics(metrics: ActivityMetrics): void {
 
 @Injectable()
 export class ActivityImportService {
-  importActivity(input: Uint8Array): ActivityImportSummary {
+  constructor(
+    @Inject(ACTIVITY_FINGERPRINT_SECRET) private readonly fingerprintSecret: Buffer,
+    private readonly activityPersistenceService: ActivityPersistenceService,
+  ) {}
+
+  async importActivity(input: Uint8Array): Promise<PersistedActivitySummary> {
     if (input.byteLength === 0) throw new ActivityImportApiError('EMPTY_FILE');
     if (hasFitSignature(input)) throw new ActivityImportApiError('UNSUPPORTED_FORMAT');
 
@@ -83,7 +97,7 @@ export class ActivityImportService {
       throw new RangeError('A parsed activity must contain timestamped samples.');
     }
 
-    return {
+    const summary: ActivityImportSummary = {
       activity: {
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
@@ -107,5 +121,6 @@ export class ActivityImportService {
         heartRate: metrics.heartRateCoverage,
       },
     };
+    return this.activityPersistenceService.create(summary, activityFingerprint(activity, this.fingerprintSecret));
   }
 }

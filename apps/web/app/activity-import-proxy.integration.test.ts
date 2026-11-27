@@ -1,15 +1,21 @@
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
 import type { IncomingMessage } from 'node:http';
-import { after, before, test } from 'node:test';
+import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NestFactory } from '@nestjs/core';
 import type { DynamicModule, INestApplication } from '@nestjs/common';
 import { gpx } from '../../api/src/gpx-fixtures.ts';
 import { MAX_ACTIVITY_FILE_BYTES } from './activity-import-utils.ts';
 import { getActivityImportTarget, proxyActivityImport } from './activity-import-proxy.ts';
 
 const require = createRequire(`${process.cwd()}/apps/api/src/app.module.ts`);
+const { configureTestDatabaseProcess } = require('../../../scripts/database-url-policy.cjs') as {
+  configureTestDatabaseProcess(environment: NodeJS.ProcessEnv): string;
+};
+configureTestDatabaseProcess(process.env);
+const { NestFactory } = require('@nestjs/core') as {
+  NestFactory: typeof import('@nestjs/core').NestFactory;
+};
 require('ts-node').register({ project: 'apps/api/tsconfig.json' });
 const { AppModule } = require('../../api/src/app.module.ts') as {
   AppModule: { register(timeoutMs?: number): DynamicModule };
@@ -17,6 +23,7 @@ const { AppModule } = require('../../api/src/app.module.ts') as {
 
 let app: INestApplication;
 let apiUrl: string;
+const createdActivityIds: string[] = [];
 
 before(async () => {
   app = await NestFactory.create(AppModule.register(1500), { logger: false });
@@ -26,6 +33,21 @@ before(async () => {
 });
 
 after(async () => { await app.close(); });
+afterEach(async () => {
+  for (const id of createdActivityIds.splice(0)) {
+    const response = await fetch(`${apiUrl}/activities/${id}`, { method: 'DELETE' });
+    assert.ok(response.status === 204 || response.status === 404);
+  }
+});
+
+async function trackCreatedActivity(response: Response): Promise<void> {
+  if (response.status !== 200) return;
+  const body = await response.clone().json() as { activity?: { id?: unknown } };
+  const id = body.activity?.id;
+  assert.equal(typeof id, 'string');
+  if (typeof id !== 'string') throw new Error('Successful persisted imports must return an activity ID.');
+  createdActivityIds.push(id);
+}
 
 function waitForApiRequest(boundary: string, apiApp = app): Promise<IncomingMessage> {
   const server = apiApp.getHttpServer();
@@ -54,6 +76,7 @@ async function waitForSuccessfulImport(targetUrl = apiUrl): Promise<void> {
   while (Date.now() < deadline) {
     const response = await proxyActivityImport(formRequest(gpx()), targetUrl);
     if (response.status === 200) {
+      await trackCreatedActivity(response);
       await response.arrayBuffer();
       return;
     }
@@ -98,6 +121,7 @@ async function errorBody(response: Response) {
 
 test('streams a synthetic GPX through the same-origin proxy and preserves the API response', async () => {
   const response = await proxyActivityImport(formRequest(gpx()), apiUrl);
+  await trackCreatedActivity(response);
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.activity.trackPointCount, 1);
@@ -118,7 +142,9 @@ test('preserves the exact 10 MiB upload boundary and backend 413 response', asyn
   const padding = MAX_ACTIVITY_FILE_BYTES - Buffer.byteLength(base);
   const exact = base + ' '.repeat(padding);
   assert.equal(Buffer.byteLength(exact), MAX_ACTIVITY_FILE_BYTES);
-  assert.equal((await proxyActivityImport(formRequest(exact), apiUrl)).status, 200);
+  const accepted = await proxyActivityImport(formRequest(exact), apiUrl);
+  await trackCreatedActivity(accepted);
+  assert.equal(accepted.status, 200);
 
   const oversized = await proxyActivityImport(formRequest(exact + ' '), apiUrl);
   assert.equal(oversized.status, 413);
@@ -147,7 +173,9 @@ test('preserves API concurrency and timeout behavior through streaming proxying'
   assert.equal(timedOut.status, 408);
   assert.equal((await errorBody(timedOut)).code, 'UPLOAD_TIMEOUT');
 
-  assert.equal((await proxyActivityImport(formRequest(gpx()), apiUrl)).status, 200);
+  const laterImport = await proxyActivityImport(formRequest(gpx()), apiUrl);
+  await trackCreatedActivity(laterImport);
+  assert.equal(laterImport.status, 200);
 });
 
 test('cancellation through the proxy releases API capacity for a later import', async () => {

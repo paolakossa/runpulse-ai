@@ -9,12 +9,16 @@ export type ActivityImportErrorCode =
   | 'INVALID_MULTIPART'
   | 'UPLOAD_TIMEOUT'
   | 'IMPORT_SATURATED'
+  | 'DUPLICATE_ACTIVITY'
+  | 'DATABASE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 type NullableNumber = number | null;
 
 export interface ActivityImportResponse {
   activity: {
+    id?: string;
+    importedAt?: string;
     startTime: string | null;
     endTime: string | null;
     segmentCount: number;
@@ -60,7 +64,15 @@ function isNullableTimestamp(value: unknown): value is string | null {
 }
 
 function isActivitySummary(value: unknown): value is ActivityImportResponse['activity'] {
+  const hasId = isRecord(value) && Object.hasOwn(value, 'id');
+  const hasImportedAt = isRecord(value) && Object.hasOwn(value, 'importedAt');
   return isRecord(value) &&
+    hasId === hasImportedAt &&
+    (!hasId || (
+      typeof value.id === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id) &&
+      isNullableTimestamp(value.importedAt)
+    )) &&
     isNullableTimestamp(value.startTime) &&
     isNullableTimestamp(value.endTime) &&
     typeof value.segmentCount === 'number' &&
@@ -119,6 +131,8 @@ function parseErrorResponse(value: unknown): ActivityImportErrorResponse | null 
     'INVALID_MULTIPART',
     'UPLOAD_TIMEOUT',
     'IMPORT_SATURATED',
+    'DUPLICATE_ACTIVITY',
+    'DATABASE_UNAVAILABLE',
     'INTERNAL_ERROR',
   ];
   if (!codes.includes(value.code)) return null;
@@ -134,6 +148,8 @@ const errorMessages: Record<ActivityImportErrorCode, string> = {
   INVALID_MULTIPART: 'The upload request was invalid. Choose the GPX file again and retry.',
   UPLOAD_TIMEOUT: 'The upload timed out. Check the local API and try again.',
   IMPORT_SATURATED: 'Another import is in progress. Wait a moment, then retry.',
+  DUPLICATE_ACTIVITY: 'This activity has already been imported. Choose a different GPX file to continue.',
+  DATABASE_UNAVAILABLE: 'The local activity database is unavailable. Confirm it is running, then retry.',
   INTERNAL_ERROR: 'The import failed unexpectedly. Please try again later.',
 };
 
@@ -146,6 +162,8 @@ export function getImportErrorMessage(statusCode: number, value: unknown): strin
   if (statusCode === 413) return errorMessages.FILE_TOO_LARGE;
   if (statusCode === 415) return errorMessages.UNSUPPORTED_FORMAT;
   if (statusCode === 429) return errorMessages.IMPORT_SATURATED;
+  if (statusCode === 409) return errorMessages.DUPLICATE_ACTIVITY;
+  if (statusCode === 503) return errorMessages.DATABASE_UNAVAILABLE;
   if (statusCode === 502) return 'Could not connect to the local Activity API. Confirm it is running, then retry.';
   if (statusCode >= 500) return 'The local API returned an unexpected server error. Please try again later.';
   return 'The local API returned an unexpected response. Check that it is running and retry.';

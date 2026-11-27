@@ -1,1 +1,20 @@
-{"name":"runpulse-ai","private":true,"workspaces":["apps/*"],"scripts":{"dev:api":"npm run dev -w @runpulse/api","dev:web":"npm run dev -w @runpulse/web","test":"node scripts/test.mjs","typecheck":"tsc --noEmit -p apps/api/tsconfig.json"},"engines":{"node":">=22"}}
+{
+  "name": "runpulse-ai",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "overrides": {
+    "effect": "3.22.1"
+  },
+  "scripts": {
+    "dev:api": "npm run db:generate && npm run dev -w @runpulse/api",
+    "dev:web": "npm run dev -w @runpulse/web",
+    "test": "node --env-file-if-exists=.env scripts/test.mjs",
+    "test:unit": "node --env-file-if-exists=.env scripts/test.mjs --unit",
+    "typecheck": "npm run db:generate && tsc --noEmit -p apps/api/tsconfig.json",
+    "db:generate": "npm run prisma:generate -w @runpulse/api",
+    "db:migrate:test": "node --env-file-if-exists=.env scripts/migrate-test-db.mjs",
+    "db:migrate:deploy": "npm run migrate:deploy -w @runpulse/api",
+    "db:migrate:status": "npm run migrate:status -w @runpulse/api"
+  },
+  "engines": {"node": ">=22.12.0 <23"}
+}

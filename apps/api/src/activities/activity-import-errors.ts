@@ -7,6 +7,11 @@ export type ActivityImportApiErrorCode =
   | 'INVALID_MULTIPART'
   | 'UPLOAD_TIMEOUT'
   | 'IMPORT_SATURATED'
+  | 'DUPLICATE_ACTIVITY'
+  | 'ACTIVITY_NOT_FOUND'
+  | 'INVALID_ACTIVITY_ID'
+  | 'INVALID_PAGINATION'
+  | 'DATABASE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 export const activityImportApiErrors: Record<
@@ -21,12 +26,20 @@ export const activityImportApiErrors: Record<
   INVALID_MULTIPART: { statusCode: 400, message: 'The multipart upload is invalid.' },
   UPLOAD_TIMEOUT: { statusCode: 408, message: 'The upload did not complete within the allowed time.' },
   IMPORT_SATURATED: { statusCode: 429, message: 'Activity import capacity is currently full.' },
+  DUPLICATE_ACTIVITY: { statusCode: 409, message: 'This activity has already been imported.' },
+  ACTIVITY_NOT_FOUND: { statusCode: 404, message: 'The requested activity was not found.' },
+  INVALID_ACTIVITY_ID: { statusCode: 400, message: 'The activity identifier is invalid.' },
+  INVALID_PAGINATION: { statusCode: 400, message: 'The activity pagination parameters are invalid.' },
+  DATABASE_UNAVAILABLE: { statusCode: 503, message: 'The local activity database is unavailable.' },
   INTERNAL_ERROR: { statusCode: 500, message: 'The activity import could not be completed.' },
 };
 
 export class ActivityImportApiError extends Error {
-  constructor(readonly code: ActivityImportApiErrorCode) {
+  readonly code: ActivityImportApiErrorCode;
+
+  constructor(code: ActivityImportApiErrorCode) {
     super(activityImportApiErrors[code].message);
+    this.code = code;
     this.name = 'ActivityImportApiError';
   }
 }

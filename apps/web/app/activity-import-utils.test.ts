@@ -7,12 +7,18 @@ import {
   formatElevation,
   formatHeartRate,
   formatPace,
+  formatLocalTimestamp,
+  getActivityApiErrorMessage,
   getImportErrorMessage,
+  isDuplicateActivityError,
+  parseActivityPageResponse,
   parseActivityImportResponse,
 } from './activity-import-utils.ts';
 
 const response = {
   activity: {
+    id: '857f4000-4264-4d12-8f52-2501d447ddf0',
+    importedAt: '2026-01-02T03:04:05.000Z',
     startTime: '2026-01-01T00:00:00.000Z',
     endTime: '2026-01-01T00:00:00.000Z',
     segmentCount: 1,
@@ -52,16 +58,28 @@ test('rejects malformed or non-finite activity responses', () => {
 });
 
 test('preserves persistence identifiers and timestamps when returned by the API', () => {
-  const persisted = {
-    ...response,
-    activity: {
-      ...response.activity,
-      id: '857f4000-4264-4d12-8f52-2501d447ddf0',
-      importedAt: '2026-01-02T03:04:05.000Z',
-    },
-  };
-  assert.deepEqual(parseActivityImportResponse(persisted), persisted);
   assert.deepEqual(parseActivityImportResponse(response), response);
+  const { id: _id, ...withoutId } = response.activity;
+  assert.equal(parseActivityImportResponse({
+    ...response,
+    activity: withoutId,
+  }), null);
+});
+
+test('validates paginated persisted activities without collapsing null and zero', () => {
+  const page = { items: [response], page: 1, pageSize: 20, total: 1, totalPages: 1 };
+  assert.deepEqual(parseActivityPageResponse(page), page);
+  assert.equal(parseActivityPageResponse({ ...page, total: -1 }), null);
+  assert.equal(parseActivityPageResponse({ ...page, pageSize: 101 }), null);
+  assert.equal(parseActivityPageResponse({ ...page, totalPages: 2 }), null);
+  assert.equal(parseActivityPageResponse({
+    ...page,
+    items: Array.from({ length: 21 }, () => response),
+    pageSize: 20,
+    total: 21,
+    totalPages: 2,
+  }), null);
+  assert.equal(parseActivityPageResponse({ ...page, items: [{ ...response, metrics: {} }] }), null);
 });
 
 test('formats null as N/A while preserving real zero measurements', () => {
@@ -110,6 +128,17 @@ test('maps stable API errors to actionable upload messages', () => {
 test('gives an actionable message for a duplicate activity', () => {
   assert.equal(
     getImportErrorMessage(409, { statusCode: 409, code: 'DUPLICATE_ACTIVITY' }),
-    'This activity has already been imported. Choose a different GPX file to continue.',
+    'This activity has already been imported. View your activity history or choose a different GPX file.',
   );
+  assert.equal(isDuplicateActivityError({ statusCode: 409, code: 'DUPLICATE_ACTIVITY' }), true);
+  assert.equal(isDuplicateActivityError({ statusCode: 409, code: 'INTERNAL_ERROR' }), false);
+});
+
+test('maps activity history errors without exposing backend details', () => {
+  assert.match(getActivityApiErrorMessage(404, { statusCode: 404, code: 'ACTIVITY_NOT_FOUND' }), /could not be found/i);
+  assert.match(getActivityApiErrorMessage(400, { statusCode: 400, code: 'INVALID_ACTIVITY_ID' }), /invalid.*activity/i);
+  assert.match(getActivityApiErrorMessage(503, { statusCode: 503, code: 'DATABASE_UNAVAILABLE', message: 'secret' }), /database.*unavailable/i);
+  assert.doesNotMatch(getActivityApiErrorMessage(503, { statusCode: 503, code: 'DATABASE_UNAVAILABLE', message: 'secret' }), /secret/);
+  assert.equal(formatLocalTimestamp(null), 'N/A');
+  assert.match(formatLocalTimestamp('2026-01-01T00:00:00.000Z'), /local time/);
 });
